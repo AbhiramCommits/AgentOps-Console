@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: agentops-console
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5435/agentops}
+    username: ${SPRING_DATASOURCE_USERNAME:agentops}
+    password: ${SPRING_DATASOURCE_PASSWORD:agentops}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Seed diffs contain literal ${...} JS template strings; we don't use Flyway placeholders.
+    placeholder-replacement: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
