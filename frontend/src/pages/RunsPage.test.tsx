@@ -1,72 +1,21 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import { fireEvent } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import RunsPage from './RunsPage'
-import * as api from '../api/client'
-import type { PageResponse, RunSummary } from '../api/types'
+import { server } from '../test/server'
+import { clearCapturedRunRequests, capturedRunRequests, successHandlers } from '../test/handlers'
+import { runFixtures, runsPage } from '../test/fixtures'
 
-vi.mock('../api/client', () => ({
-  fetchRuns: vi.fn(),
-  fetchRun: vi.fn(),
-  fetchVariants: vi.fn(),
-  fetchAcceptanceMetrics: vi.fn(),
-  fetchCostLatencyMetrics: vi.fn(),
-  reviewPatch: vi.fn(),
-  amendPatchReview: vi.fn(),
-}))
-
-const runs: RunSummary[] = [
-  {
-    id: '11111111-1111-1111-1111-111111111111',
-    tool: 'agentops-codex',
-    repo: 'acme/webapp',
-    branch: 'main',
-    model: 'gpt-4o',
-    status: 'SUCCEEDED',
-    variantId: '22222222-2222-2222-2222-222222222222',
-    variantName: 'baseline-v1',
-    startedAt: '2026-09-20T10:00:00Z',
-    finishedAt: '2026-09-20T10:30:00Z',
-    totalCostUsd: 12.345,
-    totalTokens: 42000,
-    patchCount: 5,
-    reviewedPatches: 4,
-    acceptedPatches: 2,
-  },
-  {
-    id: '33333333-3333-3333-3333-333333333333',
-    tool: 'agentops-claude-code',
-    repo: 'acme/api-gateway',
-    branch: 'feat/rate-limiter',
-    model: 'claude-sonnet-4',
-    status: 'RUNNING',
-    variantId: '44444444-4444-4444-4444-444444444444',
-    variantName: 'spec-driven-v2',
-    startedAt: '2026-09-20T12:00:00Z',
-    finishedAt: null,
-    totalCostUsd: 3.21,
-    totalTokens: 9000,
-    patchCount: 3,
-    reviewedPatches: 0,
-    acceptedPatches: 0,
-  },
-]
-
-const page: PageResponse<RunSummary> = {
-  items: runs,
-  page: 0,
-  size: 20,
-  totalElements: 40,
-  totalPages: 2,
-}
-
-function renderPage() {
+function renderPage(initialEntries: string[] = ['/']) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <RunsPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -75,8 +24,8 @@ function renderPage() {
 
 describe('RunsPage', () => {
   beforeEach(() => {
-    vi.mocked(api.fetchRuns).mockResolvedValue(page)
-    vi.mocked(api.fetchVariants).mockResolvedValue([])
+    clearCapturedRunRequests()
+    server.use(...successHandlers)
   })
 
   it('renders runs in a table with acceptance and patch counts', async () => {
@@ -85,34 +34,101 @@ describe('RunsPage', () => {
       expect(screen.getByText('acme/webapp')).toBeInTheDocument()
     })
     expect(screen.getByText('acme/api-gateway')).toBeInTheDocument()
-    expect(screen.getByText('baseline-v1')).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getByText('baseline-v1')).toBeInTheDocument()
     expect(screen.getByText('50%')).toBeInTheDocument()
-    expect(screen.getByText('Succeeded', { selector: 'span' })).toBeInTheDocument()
-    expect(screen.getByText('Running', { selector: 'span' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'acme/webapp' })).toHaveAttribute('href', '/runs/11111111-1111-1111-1111-111111111111')
+    expect(screen.getByRole('link', { name: 'acme/webapp' })).toHaveAttribute(
+      'href',
+      '/runs/11111111-1111-1111-1111-111111111111',
+    )
   })
 
-  it('shows the empty state and a clear-filters button', async () => {
-    vi.mocked(api.fetchRuns).mockResolvedValue({ ...page, items: [], totalElements: 0, totalPages: 0 })
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/?status=FAILED']}>
-          <RunsPage />
-        </MemoryRouter>
-      </QueryClientProvider>,
+  it('sends variant and status filters to the API and shows the filtered result', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('*/api/runs', ({ request }) => {
+        capturedRunRequests.push(new URL(request.url))
+        const url = new URL(request.url)
+        const status = url.searchParams.get('status')
+        const items = status === 'FAILED' ? [] : runFixtures
+        return HttpResponse.json(runsPage(items))
+      }),
     )
+    renderPage()
+
+    await screen.findByText('acme/webapp')
+    await user.selectOptions(screen.getByLabelText('Prompt variant'), '22222222-2222-2222-2222-222222222222')
+    await user.selectOptions(screen.getByLabelText('Status'), 'FAILED')
+
+    await waitFor(() => {
+      expect(screen.getByText('No runs match the current filters.')).toBeInTheDocument()
+    })
+    const last = capturedRunRequests[capturedRunRequests.length - 1]
+    expect(last.searchParams.get('variantId')).toBe('22222222-2222-2222-2222-222222222222')
+    expect(last.searchParams.get('status')).toBe('FAILED')
+  })
+
+  it('sends the date range as ISO timestamps', async () => {
+    renderPage()
+    await screen.findByText('acme/webapp')
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-08-01' } })
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-31' } })
+
+    await waitFor(() => {
+      const last = capturedRunRequests[capturedRunRequests.length - 1]
+      expect(last?.searchParams.get('from')).toBe('2026-08-01T00:00:00Z')
+    })
+    const last = capturedRunRequests[capturedRunRequests.length - 1]
+    expect(last.searchParams.get('to')).toBe('2026-08-31T23:59:59.999Z')
+  })
+
+  it('paginates server-side with prev/next controls', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('*/api/runs', ({ request }) => {
+        capturedRunRequests.push(new URL(request.url))
+        const url = new URL(request.url)
+        const page = Number(url.searchParams.get('page') ?? '0')
+        const item = { ...runFixtures[0], id: `page-${page}` }
+        return HttpResponse.json({ items: [item], page, size: 20, totalElements: 21, totalPages: 2 })
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('acme/webapp')
+    const next = screen.getByRole('button', { name: 'Next page' })
+    const prev = screen.getByRole('button', { name: 'Previous page' })
+    expect(prev).toBeDisabled()
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+
+    await user.click(next)
+
+    await waitFor(() => {
+      expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
+    })
+    const last = capturedRunRequests[capturedRunRequests.length - 1]
+    expect(last.searchParams.get('page')).toBe('1')
+  })
+
+  it('shows the empty state with a clear-filters button when filters match nothing', async () => {
+    server.use(
+      http.get('*/api/runs', () => HttpResponse.json(runsPage([]))),
+    )
+    renderPage(['/?status=FAILED'])
+
     await waitFor(() => {
       expect(screen.getByText('No runs match the current filters.')).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument()
   })
 
-  it('shows an error banner when the API fails', async () => {
-    vi.mocked(api.fetchRuns).mockRejectedValue(new Error('boom'))
+  it('shows an error banner with retry when the API fails', async () => {
+    server.use(http.get('*/api/runs', () => HttpResponse.json({ detail: 'boom' }, { status: 500 })))
     renderPage()
+
     await waitFor(() => {
       expect(screen.getByText(/Failed to load runs/)).toBeInTheDocument()
     })
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 })

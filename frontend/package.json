@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -23,8 +24,13 @@
     "@testing-library/user-event": "^14.5.2",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react-hooks": "^4.6.2",
     "jsdom": "^24.1.1",
+    "msw": "^2.15.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.8",
     "vitest": "^2.1.1"

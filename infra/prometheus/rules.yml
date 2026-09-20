@@ -1,0 +1,24 @@
+groups:
+  - name: agentops
+    interval: 1m
+    rules:
+      - alert: AgentOpsAcceptanceRateTooLow
+        expr: |
+          (
+            increase(agentops_patches_reviewed_total{decision="accepted"}[1h])
+            /
+            clamp_min(
+              increase(agentops_patches_reviewed_total{decision="accepted"}[1h])
+              +
+              increase(agentops_patches_reviewed_total{decision="rejected"}[1h]),
+              1
+            )
+          ) < 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent patch acceptance rate below 50% over the last hour"
+          description: |
+            Only {{ $value | humanizePercentage }} of the patches reviewed in
+            the last hour were accepted (alerting when below 50%).

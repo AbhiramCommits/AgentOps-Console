@@ -77,20 +77,24 @@ export default function MetricsPage() {
             xFormat={(ms) => formatDateShort(new Date(ms).toISOString())}
             yMin={0}
           />
-          <LineChart
-            title="Cost per day"
-            series={costSeries}
-            yFormat={(value) => `$${value.toFixed(0)}`}
-            xFormat={(ms) => formatDateShort(new Date(ms).toISOString())}
-            yMin={0}
-          />
-          <LineChart
-            title="Median patch latency per day"
-            series={latencySeries}
-            yFormat={(value) => formatLatency(value)}
-            xFormat={(ms) => formatDateShort(new Date(ms).toISOString())}
-            yMin={0}
-          />
+          {costSeries.length > 0 && (
+            <LineChart
+              title="Cost per day"
+              series={costSeries}
+              yFormat={(value) => `$${value.toFixed(0)}`}
+              xFormat={(ms) => formatDateShort(new Date(ms).toISOString())}
+              yMin={0}
+            />
+          )}
+          {latencySeries.length > 0 && (
+            <LineChart
+              title="Median patch latency per day"
+              series={latencySeries}
+              yFormat={(value) => formatLatency(value)}
+              xFormat={(ms) => formatDateShort(new Date(ms).toISOString())}
+              yMin={0}
+            />
+          )}
         </div>
       )}
     </div>

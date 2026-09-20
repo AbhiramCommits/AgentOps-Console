@@ -45,8 +45,21 @@ services:
 
   prometheus:
     image: prom/prometheus
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    command:
+      - --config.file=/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    environment:
+      # Optional exporter scrape targets (host+port); jobs are dropped when
+      # the host env var is empty. See infra/prometheus/entrypoint.sh.
+      COPILOTGUARD_HOST: ${COPILOTGUARD_HOST:-}
+      COPILOTGUARD_PORT: ${COPILOTGUARD_PORT:-9190}
+      AGENTDIFF_HOST: ${AGENTDIFF_HOST:-}
+      AGENTDIFF_PORT: ${AGENTDIFF_PORT:-9200}
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml.tmpl:/etc/prometheus/prometheus.yml.tmpl:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - ./prometheus/entrypoint.sh:/entrypoint.sh:ro
     depends_on:
       - backend
     ports:

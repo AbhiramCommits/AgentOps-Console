@@ -5,6 +5,9 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5435/agentops}
     username: ${SPRING_DATASOURCE_USERNAME:agentops}
     password: ${SPRING_DATASOURCE_PASSWORD:agentops}
+    hikari:
+      # date_trunc buckets are UTC-based and deterministic regardless of JVM timezone.
+      connection-init-sql: SET TIME ZONE 'UTC'
   jpa:
     open-in-view: false
     hibernate:

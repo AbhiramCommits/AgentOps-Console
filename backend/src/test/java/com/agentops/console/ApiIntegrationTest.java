@@ -138,6 +138,16 @@ class ApiIntegrationTest {
         mockMvc.perform(get("/api/runs").param("from", "2099-01-01T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(0));
+
+        mockMvc.perform(get("/api/runs").param("to", "2020-01-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0));
+
+        String variantId = seedVariantId();
+        mockMvc.perform(get("/api/runs").param("variantId", variantId).param("size", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].variantId").value(
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(variantId))));
     }
 
     @Test

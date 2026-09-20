@@ -174,13 +174,54 @@ npm run dev                # http://localhost:5173
 ## Tests
 
 ```bash
-# Backend — Testcontainers spins up postgres:16; verifies migrations, seed,
-# indexes, the review audit flow, RFC 7807 errors, and the metrics endpoints
-cd backend && mvn test
+# Backend — full suite incl. JaCoCo coverage gate (80%+ line coverage on
+# the service and controller packages; the build fails below it)
+cd backend && mvn verify
+#    unit tests:      Mockito service tests (review rules, 409, rate math)
+#    slice tests:     @WebMvcTest asserting status codes + ProblemDetail shape
+#    integration:     Testcontainers postgres:16 running the real Flyway
+#                     migrations + seed, with a month of fixture data asserting
+#                     date_trunc buckets and percentile_cont p50/p95
 
-# Frontend — Vitest + React Testing Library
-cd frontend && npm test && npm run build
+# Frontend — Vitest + React Testing Library, API mocked with MSW
+cd frontend && npm ci && tsc --noEmit && npm run lint && npm test && npm run build
+
+# E2E — boots the docker-compose stack (globalSetup), opens a run, rejects a
+# patch with an override reason, asserts the acceptance rate drops, and wipes
+# the data volume afterwards (teardown)
+cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push and PR:
+
+- **backend** — `mvn verify` on ubuntu-latest (Docker preinstalled for
+  Testcontainers), Maven cache via `setup-java`
+- **frontend** — `npm ci && tsc --noEmit && npm run lint && npm test`, npm cache
+  via `setup-node`
+- **e2e** — Playwright with Chromium; the suite boots the compose stack itself
+
+## Monitoring
+
+Prometheus scrapes the backend at `/actuator/prometheus` (JVM/HTTP metrics plus
+the custom `agentops_patches_reviewed_total{decision=}` counter and
+`agentops_run_ingest_seconds` timer).
+
+The compose stack also scrapes the existing CopilotGuard and AgentDiff
+exporters when configured — host/port come from env vars and the jobs are
+optional (dropped when the host is unset, so the stack still starts without
+them):
+
+```bash
+COPILOTGUARD_HOST=copilotguard.internal COPILOTGUARD_PORT=9190 \
+AGENTDIFF_HOST=agentdiff.internal     AGENTDIFF_PORT=9200 \
+docker compose -f infra/docker-compose.yml up
+```
+
+`infra/prometheus/rules.yml` defines
+`AgentOpsAcceptanceRateTooLow`: fires when the share of accepted patches over
+the trailing hour drops below 50% (5m `for`).
 
 ## Backend architecture
 

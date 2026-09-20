@@ -33,6 +33,11 @@ function ticks(min: number, max: number, count: number): number[] {
 export default function LineChart({ title, series, yFormat, xFormat, yMin = 0 }: LineChartProps) {
   const geometry = useMemo(() => {
     const allPoints = series.flatMap((s) => s.points)
+    if (allPoints.length === 0) {
+      // Guard: Math.min/max of an empty list is +/-Infinity, which would
+      // poison the tick math with NaN.
+      return null
+    }
     const xMin = Math.min(...allPoints.map((p) => p.x))
     const xMax = Math.max(...allPoints.map((p) => p.x))
     const yMax = Math.max(yMin, ...allPoints.map((p) => p.y))
@@ -44,6 +49,10 @@ export default function LineChart({ title, series, yFormat, xFormat, yMin = 0 }:
     const yTicks = ticks(yMin, yMax, 5)
     return { x, y, xTicks, yTicks, innerHeight, yMax }
   }, [series, yMin])
+
+  if (!geometry) {
+    return null
+  }
 
   return (
     <figure className={styles.figure}>
