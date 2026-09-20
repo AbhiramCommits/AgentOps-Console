@@ -113,7 +113,10 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(10))
                 .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(40)))
-                .andExpect(jsonPath("$.items.length()").value(10));
+                .andExpect(jsonPath("$.items.length()").value(10))
+                .andExpect(jsonPath("$.items[0].patchCount").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.items[0].reviewedPatches").isNumber())
+                .andExpect(jsonPath("$.items[0].acceptedPatches").isNumber());
 
         String body = mockMvc.perform(get("/api/runs").param("size", "50"))
                 .andReturn().getResponse().getContentAsString();
@@ -150,6 +153,9 @@ class ApiIntegrationTest {
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$.run.status").value("SUCCEEDED"))
                 .andExpect(jsonPath("$.run.totalCostUsd").value(1.5))
+                .andExpect(jsonPath("$.run.patchCount").value(2))
+                .andExpect(jsonPath("$.run.reviewedPatches").value(0))
+                .andExpect(jsonPath("$.run.acceptedPatches").value(0))
                 .andExpect(jsonPath("$.patches.length()").value(2))
                 .andReturn().getResponse().getContentAsString();
 

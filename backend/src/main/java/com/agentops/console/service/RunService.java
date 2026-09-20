@@ -26,7 +26,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -72,7 +74,24 @@ public class RunService {
         Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(200, Math.max(1, size)),
                 Sort.by(Sort.Direction.DESC, "startedAt"));
         Page<AgentRun> result = runRepository.findAll(spec, pageable);
-        return PageResponse.from(result, RunSummaryResponse::from);
+        Map<UUID, RunSummaryResponse.RunPatchStats> stats = patchStats(result.getContent());
+        return PageResponse.from(result,
+                run -> RunSummaryResponse.from(run, stats.getOrDefault(run.getId(), RunSummaryResponse.RunPatchStats.ZERO)));
+    }
+
+    private Map<UUID, RunSummaryResponse.RunPatchStats> patchStats(List<AgentRun> runs) {
+        if (runs.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = runs.stream().map(AgentRun::getId).toList();
+        Map<UUID, RunSummaryResponse.RunPatchStats> stats = new HashMap<>();
+        for (Object[] row : patchRepository.findPatchStatsByRunIds(ids)) {
+            stats.put((UUID) row[0], new RunSummaryResponse.RunPatchStats(
+                    ((Number) row[1]).intValue(),
+                    ((Number) row[2]).intValue(),
+                    ((Number) row[3]).intValue()));
+        }
+        return stats;
     }
 
     public RunDetailResponse getDetail(UUID id) {

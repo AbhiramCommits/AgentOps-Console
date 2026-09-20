@@ -1,27 +1,41 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
-import DashboardPage from './pages/DashboardPage'
+import ComparePage from './pages/ComparePage'
+import MetricsPage from './pages/MetricsPage'
 import RunDetailPage from './pages/RunDetailPage'
-import VariantsPage from './pages/VariantsPage'
+import RunsPage from './pages/RunsPage'
+import styles from './App.module.css'
 
 export default function App() {
   return (
-    <div className="app">
-      <header className="topbar">
-        <NavLink to="/" className="brand">
+    <div className={styles.app}>
+      <header className={styles.topbar}>
+        <NavLink to="/" className={styles.brand}>
           AgentOps Console
         </NavLink>
-        <nav>
-          <NavLink to="/" end>
-            Dashboard
+        <nav aria-label="Primary" className={styles.nav}>
+          <NavLink to="/" end className={({ isActive }) => (isActive ? styles.linkActive : styles.link)}>
+            Runs
           </NavLink>
-          <NavLink to="/variants">Variants</NavLink>
+          <NavLink
+            to="/compare"
+            className={({ isActive }) => (isActive ? styles.linkActive : styles.link)}
+          >
+            Compare
+          </NavLink>
+          <NavLink
+            to="/metrics"
+            className={({ isActive }) => (isActive ? styles.linkActive : styles.link)}
+          >
+            Metrics
+          </NavLink>
         </nav>
       </header>
-      <main>
+      <main className={styles.main}>
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<RunsPage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
-          <Route path="/variants" element={<VariantsPage />} />
+          <Route path="/compare" element={<ComparePage />} />
+          <Route path="/metrics" element={<MetricsPage />} />
         </Routes>
       </main>
     </div>

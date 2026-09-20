@@ -18,9 +18,12 @@ public record RunSummaryResponse(
         OffsetDateTime startedAt,
         OffsetDateTime finishedAt,
         BigDecimal totalCostUsd,
-        Integer totalTokens
+        Integer totalTokens,
+        int patchCount,
+        int reviewedPatches,
+        int acceptedPatches
 ) {
-    public static RunSummaryResponse from(AgentRun run) {
+    public static RunSummaryResponse from(AgentRun run, RunPatchStats stats) {
         return new RunSummaryResponse(
                 run.getId(),
                 run.getTool(),
@@ -33,7 +36,15 @@ public record RunSummaryResponse(
                 run.getStartedAt(),
                 run.getFinishedAt(),
                 run.getTotalCostUsd(),
-                run.getTotalTokens()
+                run.getTotalTokens(),
+                stats.patchCount(),
+                stats.reviewedPatches(),
+                stats.acceptedPatches()
         );
+    }
+
+    public record RunPatchStats(int patchCount, int reviewedPatches, int acceptedPatches) {
+
+        public static final RunPatchStats ZERO = new RunPatchStats(0, 0, 0);
     }
 }

@@ -1,0 +1,114 @@
+/*
+ * Design tokens: color, spacing, type scale.
+ * Dark mode activates automatically via prefers-color-scheme.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* -- color: surfaces & text */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-muted: #f1f3f6;
+  --color-border: #dde1e7;
+  --color-text: #1c2430;
+  --color-text-muted: #5c6675;
+  --color-text-faint: #8b95a5;
+
+  /* -- color: brand & feedback */
+  --color-accent: #2563eb;
+  --color-accent-strong: #1d4ed8;
+  --color-accent-soft: #eff4ff;
+  --color-focus: #2563eb;
+  --color-success: #15803d;
+  --color-success-soft: #dcfce7;
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fee2e2;
+  --color-warning: #92400e;
+  --color-warning-soft: #fef3c7;
+
+  /* -- color: diff */
+  --color-diff-added: #15803d;
+  --color-diff-added-bg: #e6f6ec;
+  --color-diff-removed: #b91c1c;
+  --color-diff-removed-bg: #fdeaea;
+  --color-diff-hunk-bg: #f3f6fa;
+  --color-diff-gutter: #94a3b8;
+
+  /* -- chart series palette */
+  --chart-1: #2563eb;
+  --chart-2: #dc2626;
+  --chart-3: #059669;
+  --chart-4: #d97706;
+  --chart-5: #7c3aed;
+  --chart-6: #db2777;
+  --chart-7: #0891b2;
+  --chart-8: #65a30d;
+
+  /* -- spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* -- type scale */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+
+  /* -- shape & elevation */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0e1219;
+    --color-surface: #161c26;
+    --color-surface-raised: #1b2230;
+    --color-surface-muted: #202a3a;
+    --color-border: #2b3648;
+    --color-text: #e5e9f0;
+    --color-text-muted: #9aa6b8;
+    --color-text-faint: #6d7a8e;
+
+    --color-accent: #3b82f6;
+    --color-accent-strong: #60a5fa;
+    --color-accent-soft: #1e2a44;
+    --color-focus: #60a5fa;
+    --color-success: #4ade80;
+    --color-success-soft: #14321f;
+    --color-danger: #f87171;
+    --color-danger-soft: #3b1a1a;
+    --color-warning: #fbbf24;
+    --color-warning-soft: #3a2c12;
+
+    --color-diff-added: #4ade80;
+    --color-diff-added-bg: #123324;
+    --color-diff-removed: #f87171;
+    --color-diff-removed-bg: #3a1a1e;
+    --color-diff-hunk-bg: #1d2634;
+    --color-diff-gutter: #64748b;
+
+    --chart-1: #60a5fa;
+    --chart-2: #f87171;
+    --chart-3: #34d399;
+    --chart-4: #fbbf24;
+    --chart-5: #a78bfa;
+    --chart-6: #f472b6;
+    --chart-7: #22d3ee;
+    --chart-8: #a3e635;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+}

@@ -25,6 +25,21 @@ review verdicts.
 | `frontend/` | React 18 + TypeScript + Vite, React Router, TanStack Query, Vitest + React Testing Library |
 | `infra/`    | `docker-compose.yml` (postgres, backend, frontend, prometheus) + prometheus config |
 
+## Frontend
+
+All API payloads are typed in `frontend/src/api/types.ts`; the fetch wrapper in
+`frontend/src/api/client.ts` is fully typed (no `any`; `tsc --noEmit` is part of
+the build). Styling is plain CSS Modules with design tokens
+(`src/styles/tokens.css`: color, spacing, type scale) and automatic dark mode
+via `prefers-color-scheme`.
+
+| Route         | Description                                                                   |
+| ------------- | ----------------------------------------------------------------------------- |
+| `/`           | Runs list — filters (variant, status, date range), server-side pagination, loading skeletons, empty state |
+| `/runs/:id`   | Run detail — expandable side-by-side diff view (parsed unified diffs with `+`/`-` gutters), Accept / Reject with optimistic updates; Reject requires an override reason in a `<dialog>` modal |
+| `/compare`    | Pick two prompt variants — acceptance rate, median latency, cost per accepted patch, with deltas |
+| `/metrics`    | Live SVG line charts (acceptance, cost, latency per variant), polls every 15s with a "last updated" timestamp |
+
 ## Prerequisites
 
 - Docker with Docker Compose v2 (`docker compose version`)

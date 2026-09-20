@@ -1,117 +1,92 @@
-export type RunStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+import type {
+  AcceptanceBucket,
+  BucketGranularity,
+  CostLatencyBucket,
+  PageResponse,
+  ProblemDetail,
+  ReviewRequest,
+  RunDetail,
+  RunStatus,
+  RunSummary,
+  Variant,
+  Verdict,
+} from './types'
 
-export interface RunSummary {
-  id: string
-  tool: string
-  repo: string
-  branch: string
-  model: string
-  status: RunStatus
-  variantId: string
-  variantName: string
-  startedAt: string
-  finishedAt: string | null
-  totalCostUsd: number | null
-  totalTokens: number | null
-}
+export class ApiError extends Error {
+  readonly status: number
+  readonly problem: ProblemDetail | null
 
-export interface VerdictDto {
-  id: string
-  patchId: string
-  reviewer: string
-  decision: 'ACCEPTED' | 'REJECTED'
-  overrideReason: string | null
-  decidedAt: string
-}
-
-export interface PatchDto {
-  id: string
-  runId: string
-  filePath: string
-  diffUnified: string
-  linesAdded: number
-  linesRemoved: number
-  latencyMs: number
-  costUsd: number
-  createdAt: string
-  verdict: VerdictDto | null
-}
-
-export interface RunDetail {
-  run: RunSummary
-  patches: PatchDto[]
-}
-
-export interface VariantDto {
-  id: string
-  name: string
-  description: string | null
-  template: string
-  createdAt: string
-}
-
-export interface PageResponse<T> {
-  items: T[]
-  page: number
-  size: number
-  totalElements: number
-  totalPages: number
-}
-
-export interface AcceptanceBucket {
-  variantId: string
-  variantName: string
-  bucketStart: string
-  accepted: number
-  total: number
-  acceptanceRate: number
-}
-
-export interface CostLatencyBucket {
-  variantId: string
-  variantName: string
-  bucketStart: string
-  totalCostUsd: number
-  p50LatencyMs: number
-  p95LatencyMs: number
-  patchCount: number
-}
-
-async function get<T>(path: string): Promise<T> {
-  const response = await fetch(path)
-  if (!response.ok) {
-    throw new Error(`GET ${path} failed: ${response.status} ${response.statusText}`)
+  constructor(status: number, message: string, problem: ProblemDetail | null) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.problem = problem
   }
-  return response.json() as Promise<T>
 }
 
-export function fetchRuns(params: {
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, init)
+  if (!response.ok) {
+    let problem: ProblemDetail | null = null
+    try {
+      problem = (await response.json()) as ProblemDetail
+    } catch {
+      problem = null
+    }
+    throw new ApiError(response.status, problem?.detail ?? response.statusText, problem)
+  }
+  return (await response.json()) as T
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }
+}
+
+export interface RunFilters {
   variantId?: string
   status?: RunStatus
+  from?: string
+  to?: string
   page?: number
   size?: number
-} = {}): Promise<PageResponse<RunSummary>> {
+}
+
+export function fetchRuns(filters: RunFilters = {}): Promise<PageResponse<RunSummary>> {
   const search = new URLSearchParams()
-  if (params.variantId) search.set('variantId', params.variantId)
-  if (params.status) search.set('status', params.status)
-  if (params.page != null) search.set('page', String(params.page))
-  if (params.size != null) search.set('size', String(params.size))
+  if (filters.variantId) search.set('variantId', filters.variantId)
+  if (filters.status) search.set('status', filters.status)
+  if (filters.from) search.set('from', filters.from)
+  if (filters.to) search.set('to', filters.to)
+  if (filters.page != null) search.set('page', String(filters.page))
+  if (filters.size != null) search.set('size', String(filters.size))
   const qs = search.toString()
-  return get<PageResponse<RunSummary>>(`/api/runs${qs ? `?${qs}` : ''}`)
+  return request<PageResponse<RunSummary>>(`/api/runs${qs ? `?${qs}` : ''}`)
 }
 
 export function fetchRun(id: string): Promise<RunDetail> {
-  return get<RunDetail>(`/api/runs/${id}`)
+  return request<RunDetail>(`/api/runs/${id}`)
 }
 
-export function fetchVariants(): Promise<VariantDto[]> {
-  return get<VariantDto[]>('/api/variants')
+export function fetchVariants(): Promise<Variant[]> {
+  return request<Variant[]>('/api/variants')
 }
 
-export function fetchAcceptanceMetrics(bucket: 'day' | 'week' = 'day'): Promise<AcceptanceBucket[]> {
-  return get<AcceptanceBucket[]>(`/api/metrics/acceptance?bucket=${bucket}`)
+export function fetchAcceptanceMetrics(bucket: BucketGranularity = 'day'): Promise<AcceptanceBucket[]> {
+  return request<AcceptanceBucket[]>(`/api/metrics/acceptance?bucket=${bucket}`)
 }
 
-export function fetchCostLatencyMetrics(bucket: 'day' | 'week' = 'day'): Promise<CostLatencyBucket[]> {
-  return get<CostLatencyBucket[]>(`/api/metrics/cost-latency?bucket=${bucket}`)
+export function fetchCostLatencyMetrics(bucket: BucketGranularity = 'day'): Promise<CostLatencyBucket[]> {
+  return request<CostLatencyBucket[]>(`/api/metrics/cost-latency?bucket=${bucket}`)
+}
+
+export function reviewPatch(patchId: string, body: ReviewRequest): Promise<Verdict> {
+  return request<Verdict>(`/api/patches/${patchId}/review`, jsonInit('POST', body))
+}
+
+export function amendPatchReview(patchId: string, body: ReviewRequest): Promise<Verdict> {
+  return request<Verdict>(`/api/patches/${patchId}/review`, jsonInit('PUT', body))
 }

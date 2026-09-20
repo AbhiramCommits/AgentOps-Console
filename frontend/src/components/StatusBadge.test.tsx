@@ -21,11 +21,11 @@ describe('StatusBadge', () => {
 describe('VerdictBadge', () => {
   it('renders an accepted verdict', () => {
     render(<VerdictBadge decision="ACCEPTED" />)
-    expect(screen.getByText('ACCEPTED')).toBeInTheDocument()
+    expect(screen.getByText('Accepted')).toBeInTheDocument()
   })
 
   it('renders a rejected verdict', () => {
     render(<VerdictBadge decision="REJECTED" />)
-    expect(screen.getByText('REJECTED')).toBeInTheDocument()
+    expect(screen.getByText('Rejected')).toBeInTheDocument()
   })
 })
