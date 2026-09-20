@@ -1,27 +1,21 @@
 package com.agentops.console.repo;
 
 import com.agentops.console.domain.AgentRun;
-import com.agentops.console.domain.RunStatus;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-public interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
+public interface AgentRunRepository extends JpaRepository<AgentRun, UUID>, JpaSpecificationExecutor<AgentRun> {
 
     @EntityGraph(attributePaths = "promptVariant")
-    List<AgentRun> findAllByOrderByStartedAtDesc(Pageable pageable);
+    Page<AgentRun> findAll(Specification<AgentRun> spec, Pageable pageable);
 
     @EntityGraph(attributePaths = "promptVariant")
-    List<AgentRun> findByPromptVariantIdOrderByStartedAtDesc(UUID variantId);
-
-    @EntityGraph(attributePaths = "promptVariant")
-    List<AgentRun> findByStatusOrderByStartedAtDesc(RunStatus status, Pageable pageable);
-
-    @EntityGraph(attributePaths = "promptVariant")
-    List<AgentRun> findByPromptVariantIdAndStatusOrderByStartedAtDesc(UUID variantId, RunStatus status, Pageable pageable);
-
-    long countByStatus(RunStatus status);
+    Optional<AgentRun> findById(UUID id);
 }

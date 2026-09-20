@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "agent_run")
@@ -54,6 +55,22 @@ public class AgentRun {
     private RunStatus status;
 
     protected AgentRun() {
+    }
+
+    public AgentRun(UUID id, String tool, String repo, String branch, String model,
+                    PromptVariant promptVariant, RunStatus status, OffsetDateTime startedAt,
+                    OffsetDateTime finishedAt, BigDecimal totalCostUsd, Integer totalTokens) {
+        this.id = id;
+        this.tool = tool;
+        this.repo = repo;
+        this.branch = branch;
+        this.model = model;
+        this.promptVariant = promptVariant;
+        this.status = status;
+        this.startedAt = startedAt;
+        this.finishedAt = finishedAt;
+        this.totalCostUsd = totalCostUsd;
+        this.totalTokens = totalTokens;
     }
 
     public java.util.UUID getId() {

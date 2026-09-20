@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { fetchDashboardSummary, fetchRuns, fetchVariants } from '../api/client'
+import { fetchAcceptanceMetrics, fetchRuns, fetchVariants } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 
 function formatUsd(value: number | null): string {
@@ -17,45 +17,55 @@ export default function DashboardPage() {
   const variantId = searchParams.get('variantId') ?? ''
   const status = searchParams.get('status') ?? ''
 
-  const summary = useQuery({ queryKey: ['dashboard'], queryFn: fetchDashboardSummary })
+  const summaryRuns = useQuery({
+    queryKey: ['runs', 'summary'],
+    queryFn: () => fetchRuns({ size: 500 }),
+  })
+  const acceptance = useQuery({
+    queryKey: ['metrics', 'acceptance', 'week'],
+    queryFn: () => fetchAcceptanceMetrics('week'),
+  })
   const variants = useQuery({ queryKey: ['variants'], queryFn: fetchVariants })
   const runs = useQuery({
     queryKey: ['runs', variantId, status],
-    queryFn: () => fetchRuns({ variantId: variantId || undefined, status: (status as never) || undefined }),
+    queryFn: () =>
+      fetchRuns({ variantId: variantId || undefined, status: (status as never) || undefined, size: 50 }),
   })
+
+  const all = summaryRuns.data?.items ?? []
+  const succeeded = all.filter((r) => r.status === 'SUCCEEDED').length
+  const failed = all.filter((r) => r.status === 'FAILED').length
+  const running = all.filter((r) => r.status === 'RUNNING').length
+  const totalCost = all.reduce((sum, r) => sum + (r.totalCostUsd ?? 0), 0)
+  const accepted = (acceptance.data ?? []).reduce((sum, b) => sum + b.accepted, 0)
+  const total = (acceptance.data ?? []).reduce((sum, b) => sum + b.total, 0)
 
   return (
     <div>
       <h1>Agent Runs</h1>
 
-      {summary.data && (
-        <div className="cards">
-          <div className="card">
-            <div className="card-value">{summary.data.succeededRuns}</div>
-            <div className="card-label">Succeeded</div>
-          </div>
-          <div className="card">
-            <div className="card-value">{summary.data.failedRuns}</div>
-            <div className="card-label">Failed</div>
-          </div>
-          <div className="card">
-            <div className="card-value">{summary.data.runningRuns}</div>
-            <div className="card-label">Running</div>
-          </div>
-          <div className="card">
-            <div className="card-value">{formatUsd(summary.data.totalCostUsd)}</div>
-            <div className="card-label">Total cost</div>
-          </div>
-          <div className="card">
-            <div className="card-value">
-              {summary.data.acceptedVerdicts + summary.data.rejectedVerdicts === 0
-                ? '—'
-                : `${Math.round((100 * summary.data.acceptedVerdicts) / (summary.data.acceptedVerdicts + summary.data.rejectedVerdicts))}%`}
-            </div>
-            <div className="card-label">Acceptance rate</div>
-          </div>
+      <div className="cards">
+        <div className="card">
+          <div className="card-value">{succeeded}</div>
+          <div className="card-label">Succeeded</div>
         </div>
-      )}
+        <div className="card">
+          <div className="card-value">{failed}</div>
+          <div className="card-label">Failed</div>
+        </div>
+        <div className="card">
+          <div className="card-value">{running}</div>
+          <div className="card-label">Running</div>
+        </div>
+        <div className="card">
+          <div className="card-value">{formatUsd(totalCost)}</div>
+          <div className="card-label">Total cost</div>
+        </div>
+        <div className="card">
+          <div className="card-value">{total === 0 ? '—' : `${Math.round((100 * accepted) / total)}%`}</div>
+          <div className="card-label">Acceptance rate</div>
+        </div>
+      </div>
 
       <div className="filters">
         <label>
@@ -71,8 +81,8 @@ export default function DashboardPage() {
           >
             <option value="">All</option>
             {(variants.data ?? []).map((v) => (
-              <option key={v.variant.id} value={v.variant.id}>
-                {v.variant.name}
+              <option key={v.id} value={v.id}>
+                {v.name}
               </option>
             ))}
           </select>
@@ -114,7 +124,7 @@ export default function DashboardPage() {
             </tr>
           </thead>
           <tbody>
-            {runs.data.map((run) => (
+            {runs.data.items.map((run) => (
               <tr key={run.id}>
                 <td>{formatDate(run.startedAt)}</td>
                 <td>{run.repo}</td>

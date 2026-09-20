@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface PromptVariantRepository extends JpaRepository<PromptVariant, UUID> {
 
     List<PromptVariant> findAllByOrderByCreatedAtAsc();
+
+    boolean existsByName(String name);
 }

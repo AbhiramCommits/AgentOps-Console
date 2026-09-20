@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "patch")
@@ -49,6 +50,24 @@ public class Patch {
     private OffsetDateTime createdAt;
 
     protected Patch() {
+    }
+
+    public Patch(UUID id, AgentRun run, String filePath, String diffUnified,
+                 int linesAdded, int linesRemoved, int latencyMs, BigDecimal costUsd,
+                 OffsetDateTime createdAt) {
+        this.id = id;
+        this.run = run;
+        this.filePath = filePath;
+        this.diffUnified = diffUnified;
+        this.linesAdded = linesAdded;
+        this.linesRemoved = linesRemoved;
+        this.latencyMs = latencyMs;
+        this.costUsd = costUsd;
+        this.createdAt = createdAt;
+    }
+
+    public void setReviewVerdict(ReviewVerdict reviewVerdict) {
+        this.reviewVerdict = reviewVerdict;
     }
 
     public java.util.UUID getId() {

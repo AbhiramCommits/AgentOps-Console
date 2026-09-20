@@ -7,7 +7,7 @@ review verdicts.
 ┌─────────────┐     ┌──────────────────────┐     ┌──────────────┐
 │  frontend   │     │       backend        │     │   postgres   │
 │ React 18 +  │ ──► │ Spring Boot 3.3      │ ──► │  postgres:16 │
-│ Vite/nginx  │ /api│ Java 21 + Flyway     │ JDBC│  Flyway V1+V2│
+│ Vite/nginx  │ /api│ Java 21 + Flyway     │ JDBC│  Flyway V1-V3│
 │    :5173    │     │        :8080         │     │    :5435     │
 └─────────────┘     └──────────┬───────────┘     └──────────────┘
                                │ /actuator/prometheus
@@ -53,7 +53,7 @@ curl -s http://localhost:8080/actuator/health
 # {"status":"UP", ...}
 
 curl -s http://localhost:8080/api/runs | head -c 200
-curl -s http://localhost:5173/api/dashboard/summary
+curl -s http://localhost:5173/api/metrics/acceptance?bucket=week | head -c 200
 ```
 
 Stop it:
@@ -84,7 +84,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 | `prompt_variant`  | Named prompt templates being A/B tested                        |
 | `agent_run`       | One agent run; references the prompt variant used; status check (`RUNNING`/`SUCCEEDED`/`FAILED`) |
 | `patch`           | A diff produced by a run; FK to `agent_run` with `ON DELETE CASCADE` |
-| `review_verdict`  | Human/bot verdict on a patch; unique FK to `patch`; decision check (`ACCEPTED`/`REJECTED`) |
+| `review_verdict`  | Current verdict on a patch; unique FK to `patch`; decision check (`ACCEPTED`/`REJECTED`) |
+| `review_audit`    | Audit trail — every verdict change (create/amend) appended, history never overwritten |
 
 Indexes (each commented with the query it serves):
 
@@ -92,8 +93,9 @@ Indexes (each commented with the query it serves):
 | ---------------------------------------- | --------------------------------------------------- |
 | `agent_run (started_at DESC)`            | dashboard recent-runs list — `GET /api/runs`        |
 | `agent_run (prompt_variant_id, started_at)` | runs filtered by variant — `GET /api/runs?variantId=` |
-| `patch (run_id)`                         | patches of a run — `GET /api/runs/{id}/patches`     |
-| `review_verdict (decision, decided_at)`  | acceptance stats over time — `GET /api/dashboard/summary` |
+| `patch (run_id)`                         | patches of a run — `GET /api/runs/{id}`             |
+| `review_verdict (decision, decided_at)`  | acceptance stats over time — `GET /api/metrics/acceptance` |
+| `review_audit (patch_id, changed_at)`    | per-patch review history (V3)                       |
 
 ### `V2__seed.sql`
 
@@ -106,17 +108,37 @@ Deterministic seed data so the dashboard is populated on first boot:
 
 Timestamps are relative to `NOW()` so the data always looks fresh.
 
+### `V3__review_audit.sql`
+
+Append-only audit trail for review verdicts. `review_verdict` always holds the
+current state; every create or amend also inserts a row into `review_audit`
+(`action` = `CREATED`/`AMENDED`) so the full history is preserved.
+
 ## API
+
+All errors are RFC 7807 `application/problem+json` `ProblemDetail` responses
+(type/title/status/detail/instance + field errors for validation failures).
 
 | Endpoint                     | Description                                   |
 | ---------------------------- | --------------------------------------------- |
-| `GET /api/runs`              | Runs, newest first; `?variantId=` and `?status=` filters |
-| `GET /api/runs/{id}`         | One run                                       |
-| `GET /api/runs/{id}/patches` | Patches of a run, each with its verdict       |
-| `GET /api/variants`          | Variants with acceptance stats                |
-| `GET /api/dashboard/summary` | Totals: costs, tokens, verdicts, 14-day window |
+| `GET /api/runs`              | Paginated, sorted by `started_at` desc; filters `?variantId=&status=&from=&to=&page=&size=` |
+| `GET /api/runs/{id}`         | Run detail with its patches and each patch's verdict |
+| `POST /api/runs`             | Ingest a run with its patches in one transaction (atomic) |
+| `GET /api/patches/{id}`      | Single patch with full diff and verdict       |
+| `POST /api/patches/{id}/review` | Record first verdict `{reviewer, decision, overrideReason}` — 409 if already reviewed |
+| `PUT /api/patches/{id}/review`  | Amend the verdict; previous state kept in `review_audit` |
+| `GET /api/variants`          | All prompt variants                           |
+| `POST /api/variants`         | Create a prompt variant                       |
+| `GET /api/metrics/acceptance?bucket=day\|week` | Acceptance rate per variant per time bucket (native SQL, `date_trunc` + `GROUP BY`) |
+| `GET /api/metrics/cost-latency?bucket=day\|week` | p50/p95 latency and summed cost per variant per bucket (native SQL, `percentile_cont`) |
 | `GET /actuator/health`       | Health (liveness/readiness probes)            |
-| `GET /actuator/prometheus`   | Metrics scraped by Prometheus                 |
+| `GET /actuator/prometheus`   | Prometheus metrics: JVM/HTTP + custom `agentops_patches_reviewed_total{decision=}` counter and `agentops_run_ingest_seconds` timer |
+
+Review rules: a `REJECTED` decision requires a non-blank `overrideReason`
+(400 otherwise); a patch can only be reviewed once via `POST` (409 on repeat,
+use `PUT` to amend). The two metrics endpoints are implemented as native SQL
+with `date_trunc`/`percentile_cont` + `GROUP BY` (no in-memory aggregation);
+the SQL comments show the `EXPLAIN` plans using the V1 indexes.
 
 ## Local development (without Docker)
 
@@ -137,9 +159,24 @@ npm run dev                # http://localhost:5173
 ## Tests
 
 ```bash
-# Backend — Testcontainers spins up postgres:16, verifies migrations + seed + indexes
+# Backend — Testcontainers spins up postgres:16; verifies migrations, seed,
+# indexes, the review audit flow, RFC 7807 errors, and the metrics endpoints
 cd backend && mvn test
 
 # Frontend — Vitest + React Testing Library
 cd frontend && npm test && npm run build
 ```
+
+## Backend architecture
+
+Layered design in `backend/src/main/java/com/agentops/console`:
+
+| Package           | Responsibility                                                        |
+| ----------------- | --------------------------------------------------------------------- |
+| `domain/`         | JPA `@Entity` classes (never exposed over HTTP)                       |
+| `repo/`           | Spring Data repositories                                              |
+| `service/`        | Business rules (review workflow, atomic ingest, native-SQL metrics)   |
+| `api/`            | `@RestController` endpoints                                          |
+| `api/dto/request` | Request DTOs with Bean Validation (`@NotBlank`, `@Min`, …)            |
+| `api/dto/response`| Response DTOs (entities are mapped before leaving the service layer)  |
+| `api/error/`      | `@RestControllerAdvice` mapping errors to RFC 7807 `ProblemDetail`    |

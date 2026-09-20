@@ -1,11 +1,11 @@
-package com.agentops.console.api;
+package com.agentops.console.api.dto.response;
 
 import com.agentops.console.domain.ReviewVerdict;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record VerdictDto(
+public record VerdictResponse(
         UUID id,
         UUID patchId,
         String reviewer,
@@ -13,8 +13,8 @@ public record VerdictDto(
         String overrideReason,
         OffsetDateTime decidedAt
 ) {
-    public static VerdictDto from(ReviewVerdict verdict) {
-        return new VerdictDto(
+    public static VerdictResponse from(ReviewVerdict verdict) {
+        return new VerdictResponse(
                 verdict.getId(),
                 verdict.getPatch().getId(),
                 verdict.getReviewer(),

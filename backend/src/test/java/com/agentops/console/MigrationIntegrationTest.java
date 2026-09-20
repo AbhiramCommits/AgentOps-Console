@@ -23,10 +23,10 @@ class MigrationIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliesBothMigrations() {
+    void flywayAppliesAllMigrations() {
         Integer applied = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success", Integer.class);
-        assertThat(applied).isEqualTo(2);
+        assertThat(applied).isEqualTo(3);
     }
 
     @Test
@@ -35,6 +35,7 @@ class MigrationIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run", Integer.class)).isEqualTo(40);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM patch", Integer.class)).isEqualTo(200);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM review_verdict", Integer.class)).isEqualTo(140);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM review_audit", Integer.class)).isZero();
     }
 
     @Test
@@ -45,9 +46,10 @@ class MigrationIntegrationTest {
                 WHERE indexname IN ('idx_agent_run_started_at',
                                     'idx_agent_run_variant_started_at',
                                     'idx_patch_run_id',
-                                    'idx_review_verdict_decision_decided_at')
+                                    'idx_review_verdict_decision_decided_at',
+                                    'idx_review_audit_patch_changed_at')
                 """, Integer.class);
-        assertThat(count).isEqualTo(4);
+        assertThat(count).isEqualTo(5);
     }
 
     @Test
@@ -60,7 +62,11 @@ class MigrationIntegrationTest {
         Integer orphanVerdicts = jdbc.queryForObject(
                 "SELECT count(*) FROM review_verdict rv WHERE NOT EXISTS (SELECT 1 FROM patch p WHERE p.id = rv.patch_id)",
                 Integer.class);
+        Integer orphanAudits = jdbc.queryForObject(
+                "SELECT count(*) FROM review_audit ra WHERE NOT EXISTS (SELECT 1 FROM patch p WHERE p.id = ra.patch_id)",
+                Integer.class);
         assertThat(orphanPatches).isZero();
         assertThat(orphanVerdicts).isZero();
+        assertThat(orphanAudits).isZero();
     }
 }

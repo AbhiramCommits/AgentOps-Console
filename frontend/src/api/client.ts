@@ -37,35 +37,44 @@ export interface PatchDto {
   verdict: VerdictDto | null
 }
 
+export interface RunDetail {
+  run: RunSummary
+  patches: PatchDto[]
+}
+
 export interface VariantDto {
   id: string
   name: string
-  description: string
+  description: string | null
+  template: string
   createdAt: string
 }
 
-export interface VariantStats {
+export interface PageResponse<T> {
+  items: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface AcceptanceBucket {
   variantId: string
   variantName: string
+  bucketStart: string
   accepted: number
-  totalVerdicts: number
+  total: number
+  acceptanceRate: number
 }
 
-export interface VariantWithStats {
-  variant: VariantDto
-  stats: VariantStats | null
-}
-
-export interface DashboardSummary {
-  runningRuns: number
-  succeededRuns: number
-  failedRuns: number
+export interface CostLatencyBucket {
+  variantId: string
+  variantName: string
+  bucketStart: string
   totalCostUsd: number
-  totalTokens: number
-  acceptedVerdicts: number
-  rejectedVerdicts: number
-  acceptedLast14Days: number
-  rejectedLast14Days: number
+  p50LatencyMs: number
+  p95LatencyMs: number
+  patchCount: number
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -76,26 +85,33 @@ async function get<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function fetchRuns(params: { variantId?: string; status?: RunStatus } = {}): Promise<RunSummary[]> {
+export function fetchRuns(params: {
+  variantId?: string
+  status?: RunStatus
+  page?: number
+  size?: number
+} = {}): Promise<PageResponse<RunSummary>> {
   const search = new URLSearchParams()
   if (params.variantId) search.set('variantId', params.variantId)
   if (params.status) search.set('status', params.status)
+  if (params.page != null) search.set('page', String(params.page))
+  if (params.size != null) search.set('size', String(params.size))
   const qs = search.toString()
-  return get<RunSummary[]>(`/api/runs${qs ? `?${qs}` : ''}`)
+  return get<PageResponse<RunSummary>>(`/api/runs${qs ? `?${qs}` : ''}`)
 }
 
-export function fetchRun(id: string): Promise<RunSummary> {
-  return get<RunSummary>(`/api/runs/${id}`)
+export function fetchRun(id: string): Promise<RunDetail> {
+  return get<RunDetail>(`/api/runs/${id}`)
 }
 
-export function fetchRunPatches(id: string): Promise<PatchDto[]> {
-  return get<PatchDto[]>(`/api/runs/${id}/patches`)
+export function fetchVariants(): Promise<VariantDto[]> {
+  return get<VariantDto[]>('/api/variants')
 }
 
-export function fetchVariants(): Promise<VariantWithStats[]> {
-  return get<VariantWithStats[]>('/api/variants')
+export function fetchAcceptanceMetrics(bucket: 'day' | 'week' = 'day'): Promise<AcceptanceBucket[]> {
+  return get<AcceptanceBucket[]>(`/api/metrics/acceptance?bucket=${bucket}`)
 }
 
-export function fetchDashboardSummary(): Promise<DashboardSummary> {
-  return get<DashboardSummary>('/api/dashboard/summary')
+export function fetchCostLatencyMetrics(bucket: 'day' | 'week' = 'day'): Promise<CostLatencyBucket[]> {
+  return get<CostLatencyBucket[]>(`/api/metrics/cost-latency?bucket=${bucket}`)
 }

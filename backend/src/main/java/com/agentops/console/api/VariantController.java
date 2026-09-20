@@ -1,38 +1,39 @@
 package com.agentops.console.api;
 
-import com.agentops.console.repo.PromptVariantRepository;
-import com.agentops.console.repo.ReviewVerdictRepository;
+import com.agentops.console.api.dto.request.CreateVariantRequest;
+import com.agentops.console.api.dto.response.VariantResponse;
+import com.agentops.console.service.VariantService;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.net.URI;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/variants")
 public class VariantController {
 
-    private final PromptVariantRepository variantRepository;
-    private final ReviewVerdictRepository verdictRepository;
+    private final VariantService variantService;
 
-    public VariantController(PromptVariantRepository variantRepository, ReviewVerdictRepository verdictRepository) {
-        this.variantRepository = variantRepository;
-        this.verdictRepository = verdictRepository;
+    public VariantController(VariantService variantService) {
+        this.variantService = variantService;
     }
 
     @GetMapping
-    public List<VariantWithStats> list() {
-        Map<UUID, VariantStats> statsByVariant = verdictRepository.findAcceptanceStatsByVariant().stream()
-                .collect(Collectors.toMap(VariantStats::variantId, Function.identity()));
-        return variantRepository.findAllByOrderByCreatedAtAsc().stream()
-                .map(v -> new VariantWithStats(VariantDto.from(v), statsByVariant.get(v.getId())))
-                .toList();
+    public List<VariantResponse> list() {
+        return variantService.list();
     }
 
-    public record VariantWithStats(VariantDto variant, VariantStats stats) {
+    @PostMapping
+    public ResponseEntity<VariantResponse> create(@Valid @RequestBody CreateVariantRequest request) {
+        VariantResponse created = variantService.create(request);
+        return ResponseEntity
+                .created(URI.create("/api/variants/" + created.id()))
+                .body(created);
     }
 }

@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "prompt_variant")
@@ -28,6 +29,15 @@ public class PromptVariant {
     private OffsetDateTime createdAt;
 
     protected PromptVariant() {
+    }
+
+    public PromptVariant(UUID id, String name, String template, String description,
+                         OffsetDateTime createdAt) {
+        this.id = id;
+        this.name = name;
+        this.template = template;
+        this.description = description;
+        this.createdAt = createdAt;
     }
 
     public java.util.UUID getId() {

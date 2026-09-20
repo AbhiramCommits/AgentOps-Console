@@ -7,22 +7,22 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "review_verdict")
-public class ReviewVerdict {
+@Table(name = "review_audit")
+public class ReviewAudit {
 
     @Id
     @Column(name = "id", columnDefinition = "uuid")
-    private java.util.UUID id;
+    private UUID id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "patch_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "patch_id", nullable = false)
     private Patch patch;
 
     @Column(name = "reviewer", nullable = false)
@@ -35,31 +35,28 @@ public class ReviewVerdict {
     @Column(name = "override_reason")
     private String overrideReason;
 
-    @Column(name = "decided_at", nullable = false)
-    private OffsetDateTime decidedAt;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "action", nullable = false, length = 16)
+    private ReviewAction action;
 
-    protected ReviewVerdict() {
+    @Column(name = "changed_at", nullable = false)
+    private OffsetDateTime changedAt;
+
+    protected ReviewAudit() {
     }
 
-    public ReviewVerdict(UUID id, Patch patch, String reviewer, VerdictDecision decision,
-                         String overrideReason, OffsetDateTime decidedAt) {
+    public ReviewAudit(UUID id, Patch patch, String reviewer, VerdictDecision decision,
+                       String overrideReason, ReviewAction action, OffsetDateTime changedAt) {
         this.id = id;
         this.patch = patch;
         this.reviewer = reviewer;
         this.decision = decision;
         this.overrideReason = overrideReason;
-        this.decidedAt = decidedAt;
+        this.action = action;
+        this.changedAt = changedAt;
     }
 
-    public void amend(String reviewer, VerdictDecision decision, String overrideReason,
-                      OffsetDateTime decidedAt) {
-        this.reviewer = reviewer;
-        this.decision = decision;
-        this.overrideReason = overrideReason;
-        this.decidedAt = decidedAt;
-    }
-
-    public java.util.UUID getId() {
+    public UUID getId() {
         return id;
     }
 
@@ -79,7 +76,11 @@ public class ReviewVerdict {
         return overrideReason;
     }
 
-    public OffsetDateTime getDecidedAt() {
-        return decidedAt;
+    public ReviewAction getAction() {
+        return action;
+    }
+
+    public OffsetDateTime getChangedAt() {
+        return changedAt;
     }
 }

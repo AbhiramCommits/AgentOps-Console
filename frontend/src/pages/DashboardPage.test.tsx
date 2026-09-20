@@ -7,22 +7,10 @@ import * as api from '../api/client'
 vi.mock('../api/client', () => ({
   fetchRuns: vi.fn(),
   fetchRun: vi.fn(),
-  fetchRunPatches: vi.fn(),
   fetchVariants: vi.fn(),
-  fetchDashboardSummary: vi.fn(),
+  fetchAcceptanceMetrics: vi.fn(),
+  fetchCostLatencyMetrics: vi.fn(),
 }))
-
-const summary: api.DashboardSummary = {
-  runningRuns: 2,
-  succeededRuns: 34,
-  failedRuns: 4,
-  totalCostUsd: 287.42,
-  totalTokens: 1_850_000,
-  acceptedVerdicts: 98,
-  rejectedVerdicts: 42,
-  acceptedLast14Days: 12,
-  rejectedLast14Days: 6,
-}
 
 const runs: api.RunSummary[] = [
   {
@@ -55,6 +43,33 @@ const runs: api.RunSummary[] = [
   },
 ]
 
+const page: api.PageResponse<api.RunSummary> = {
+  items: runs,
+  page: 0,
+  size: 50,
+  totalElements: 40,
+  totalPages: 1,
+}
+
+const acceptance: api.AcceptanceBucket[] = [
+  {
+    variantId: '22222222-2222-2222-2222-222222222222',
+    variantName: 'baseline-v1',
+    bucketStart: '2026-09-14T00:00:00Z',
+    accepted: 6,
+    total: 14,
+    acceptanceRate: 0.43,
+  },
+  {
+    variantId: '44444444-4444-4444-4444-444444444444',
+    variantName: 'spec-driven-v2',
+    bucketStart: '2026-09-14T00:00:00Z',
+    accepted: 7,
+    total: 15,
+    acceptanceRate: 0.47,
+  },
+]
+
 function renderDashboard() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -70,17 +85,18 @@ function renderDashboard() {
 
 describe('DashboardPage', () => {
   beforeEach(() => {
-    vi.mocked(api.fetchDashboardSummary).mockResolvedValue(summary)
+    vi.mocked(api.fetchRuns).mockResolvedValue(page)
     vi.mocked(api.fetchVariants).mockResolvedValue([])
-    vi.mocked(api.fetchRuns).mockResolvedValue(runs)
+    vi.mocked(api.fetchAcceptanceMetrics).mockResolvedValue(acceptance)
   })
 
   it('shows summary cards', async () => {
     renderDashboard()
     await waitFor(() => {
-      expect(screen.getByText('$287.42')).toBeInTheDocument()
+      expect(screen.getByText('$15.55')).toBeInTheDocument()
     })
-    expect(screen.getByText('70%')).toBeInTheDocument()
+    expect(screen.getByText('45%')).toBeInTheDocument()
+    expect(screen.getByText('Succeeded', { selector: '.card-label' })).toBeInTheDocument()
   })
 
   it('lists runs with repo, variant and status', async () => {

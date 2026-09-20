@@ -1,4 +1,4 @@
-package com.agentops.console.api;
+package com.agentops.console.api.dto.response;
 
 import com.agentops.console.domain.AgentRun;
 
@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record RunSummary(
+public record RunSummaryResponse(
         UUID id,
         String tool,
         String repo,
@@ -20,8 +20,8 @@ public record RunSummary(
         BigDecimal totalCostUsd,
         Integer totalTokens
 ) {
-    public static RunSummary from(AgentRun run) {
-        return new RunSummary(
+    public static RunSummaryResponse from(AgentRun run) {
+        return new RunSummaryResponse(
                 run.getId(),
                 run.getTool(),
                 run.getRepo(),

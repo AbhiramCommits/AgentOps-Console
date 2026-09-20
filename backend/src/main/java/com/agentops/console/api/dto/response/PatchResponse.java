@@ -1,4 +1,4 @@
-package com.agentops.console.api;
+package com.agentops.console.api.dto.response;
 
 import com.agentops.console.domain.Patch;
 
@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record PatchDto(
+public record PatchResponse(
         UUID id,
         UUID runId,
         String filePath,
@@ -16,10 +16,10 @@ public record PatchDto(
         Integer latencyMs,
         BigDecimal costUsd,
         OffsetDateTime createdAt,
-        VerdictDto verdict
+        VerdictResponse verdict
 ) {
-    public static PatchDto from(Patch patch) {
-        return new PatchDto(
+    public static PatchResponse from(Patch patch) {
+        return new PatchResponse(
                 patch.getId(),
                 patch.getRun().getId(),
                 patch.getFilePath(),
@@ -29,7 +29,7 @@ public record PatchDto(
                 patch.getLatencyMs(),
                 patch.getCostUsd(),
                 patch.getCreatedAt(),
-                patch.getReviewVerdict() == null ? null : VerdictDto.from(patch.getReviewVerdict())
+                patch.getReviewVerdict() == null ? null : VerdictResponse.from(patch.getReviewVerdict())
         );
     }
 }
