@@ -313,6 +313,16 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.errors.name").exists());
     }
 
+    // ------------------------------------------------------------------ openapi
+
+    @Test
+    void openApiDocsAreServed() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").exists())
+                .andExpect(jsonPath("$.paths['/api/runs']").exists());
+    }
+
     // ------------------------------------------------------------------ metrics
 
     @Test

@@ -1,238 +1,255 @@
 # AgentOps Console
 
-Dashboard for tracking AI coding-agent runs: prompt variants, patches, costs, and
-review verdicts.
+**Problem.** Teams are shipping LLM-generated patches at machine speed, but
+nobody can answer the questions that matter afterwards: which prompt variant
+produced the code that survived review, why a patch was rejected, or what the
+accepted patches actually cost. AgentOps Console is a self-hosted record of
+every agent run — the prompt variant used, every patch with its full diff, the
+human or bot verdict on it (with override reasons), and the cost and latency of
+producing it — so engineering can make these decisions with data instead of
+anecdotes.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser
+        UI[React 18 SPA<br/>Vite · TanStack Query · CSS Modules]
+    end
+    UI -->|"/api/*" via nginx| NGINX[nginx :5173]
+    NGINX --> API[Spring Boot 3.3 :8080<br/>REST + Flyway + JPA + Actuator]
+    API --> PG[(PostgreSQL 16<br/>Flyway V1-V3)]
+    PROM[Prometheus :9090] -->|scrape /actuator/prometheus| API
+    PROM -.->|optional scrape| COPILOT[CopilotGuard exporter]
+    PROM -.->|optional scrape| AGENTDIFF[AgentDiff exporter]
 ```
-┌─────────────┐     ┌──────────────────────┐     ┌──────────────┐
-│  frontend   │     │       backend        │     │   postgres   │
-│ React 18 +  │ ──► │ Spring Boot 3.3      │ ──► │  postgres:16 │
-│ Vite/nginx  │ /api│ Java 21 + Flyway     │ JDBC│  Flyway V1-V3│
-│    :5173    │     │        :8080         │     │    :5435     │
-└─────────────┘     └──────────┬───────────┘     └──────────────┘
-                               │ /actuator/prometheus
-                        ┌──────▼──────┐
-                        │ prometheus  │
-                        │    :9090    │
-                        └─────────────┘
-```
 
-## Layout
+One compose stack (`infra/docker-compose.yml`): Postgres (Flyway applies the
+schema and seed on first boot), the Spring Boot API, the nginx-served React
+SPA, and Prometheus scraping the backend plus — optionally — the existing
+CopilotGuard and AgentDiff exporters.
 
-| Path        | Contents                                                                     |
-| ----------- | ---------------------------------------------------------------------------- |
-| `backend/`  | Spring Boot 3.3 (Java 21, Maven): web, data-jpa, validation, actuator, flyway, postgresql, testcontainers |
-| `frontend/` | React 18 + TypeScript + Vite, React Router, TanStack Query, Vitest + React Testing Library |
-| `infra/`    | `docker-compose.yml` (postgres, backend, frontend, prometheus) + prometheus config |
-
-## Frontend
-
-All API payloads are typed in `frontend/src/api/types.ts`; the fetch wrapper in
-`frontend/src/api/client.ts` is fully typed (no `any`; `tsc --noEmit` is part of
-the build). Styling is plain CSS Modules with design tokens
-(`src/styles/tokens.css`: color, spacing, type scale) and automatic dark mode
-via `prefers-color-scheme`.
-
-| Route         | Description                                                                   |
-| ------------- | ----------------------------------------------------------------------------- |
-| `/`           | Runs list — filters (variant, status, date range), server-side pagination, loading skeletons, empty state |
-| `/runs/:id`   | Run detail — expandable side-by-side diff view (parsed unified diffs with `+`/`-` gutters), Accept / Reject with optimistic updates; Reject requires an override reason in a `<dialog>` modal |
-| `/compare`    | Pick two prompt variants — acceptance rate, median latency, cost per accepted patch, with deltas |
-| `/metrics`    | Live SVG line charts (acceptance, cost, latency per variant), polls every 15s with a "last updated" timestamp |
-
-## Prerequisites
-
-- Docker with Docker Compose v2 (`docker compose version`)
-- Optional, for local dev outside Docker: JDK 21 + Maven 3.9, Node 20+
-
-## Quick start
+## Quickstart
 
 ```bash
 docker compose -f infra/docker-compose.yml up --build
 ```
 
-The first build takes a few minutes (Maven + npm). Flyway applies the migrations
-automatically on first backend startup, including the seed data.
+| URL | What |
+| --- | --- |
+| http://localhost:5173 | Dashboard (seeded with 40 runs, 200 patches, 140 verdicts) |
+| http://localhost:5173/runs/{id} | Run detail — expand a patch for the side-by-side diff, Accept/Reject it |
+| http://localhost:5173/compare | Prompt-variant A/B comparison |
+| http://localhost:5173/metrics | Live acceptance/cost/latency charts (15s polling) |
+| http://localhost:8080/swagger-ui | Interactive OpenAPI docs for the REST API |
+| http://localhost:8080/actuator/prometheus | Metrics endpoint scraped by Prometheus |
+| http://localhost:9090 | Prometheus UI (includes the acceptance-rate alert rule) |
 
-| Service    | URL                                   |
-| ---------- | ------------------------------------- |
-| Frontend   | http://localhost:5173                 |
-| Backend    | http://localhost:8080                 |
-| Postgres   | `localhost:5435` (user/pass/db: `agentops`) |
-| Prometheus | http://localhost:9090                 |
-
-Verify:
-
-```bash
-curl -s http://localhost:8080/actuator/health
-# {"status":"UP", ...}
-
-curl -s http://localhost:8080/api/runs | head -c 200
-curl -s http://localhost:5173/api/metrics/acceptance?bucket=week | head -c 200
-```
-
-Stop it:
+There is no login — it's a self-hosted demo tool; the seed data doubles as the
+demo dataset. Want a busier dashboard for demos or screenshots? Load 500 more
+runs:
 
 ```bash
-docker compose -f infra/docker-compose.yml down
-# add -v to also delete the Postgres data volume (migrations re-run on next up)
+./scripts/seed-demo.sh
 ```
 
-### Port conflicts
+> Verified from a clean `git clone` on macOS with Docker Desktop: `docker
+> compose -f infra/docker-compose.yml up --build` brings up all four services,
+> Flyway applies V1–V3, and the URLs above respond. (On macOS, Docker Desktop
+> reserves host ports 5432–5434 and sometimes 8080/5173; the stack uses 5435
+> for Postgres and `BACKEND_PORT`/`FRONTEND_PORT`/`PROMETHEUS_PORT` env vars
+> override the rest.)
 
-Postgres is published on host port **5435** (5432–5434 are reserved by Docker
-Desktop on macOS). The backend/frontend/prometheus ports can be overridden
-without editing the compose file:
+### Screenshots
 
-```bash
-BACKEND_PORT=18080 FRONTEND_PORT=15173 docker compose -f infra/docker-compose.yml up
+| Runs list | Run detail | Live metrics |
+| --------- | ---------- | ------------ |
+| ![Runs list](docs/screenshots/runs-list.png) | ![Run detail](docs/screenshots/run-detail.png) | ![Metrics](docs/screenshots/metrics.png) |
+
+## Schema
+
+```mermaid
+erDiagram
+    PROMPT_VARIANT ||--o{ AGENT_RUN : "used by"
+    AGENT_RUN ||--o{ PATCH : "produces"
+    PATCH ||--o| REVIEW_VERDICT : "has at most one"
+    PATCH ||--o{ REVIEW_AUDIT : "history of"
+
+    PROMPT_VARIANT {
+        uuid id PK
+        text name UK
+        text template
+        text description
+        timestamptz created_at
+    }
+    AGENT_RUN {
+        uuid id PK
+        uuid prompt_variant_id FK
+        text tool
+        text repo
+        text branch
+        text model
+        timestamptz started_at
+        timestamptz finished_at
+        numeric total_cost_usd
+        int total_tokens
+        text status "RUNNING | SUCCEEDED | FAILED"
+    }
+    PATCH {
+        uuid id PK
+        uuid run_id FK
+        text file_path
+        text diff_unified
+        int lines_added
+        int lines_removed
+        int latency_ms
+        numeric cost_usd
+        timestamptz created_at
+    }
+    REVIEW_VERDICT {
+        uuid id PK
+        uuid patch_id FK_UK
+        text reviewer
+        text decision "ACCEPTED | REJECTED"
+        text override_reason
+        timestamptz decided_at
+    }
+    REVIEW_AUDIT {
+        uuid id PK
+        uuid patch_id FK
+        text reviewer
+        text decision
+        text override_reason
+        text action "CREATED | AMENDED"
+        timestamptz changed_at
+    }
 ```
 
-## Database schema (Flyway)
+**Why this is (mostly) 3NF**
 
-Migrations live in `backend/src/main/resources/db/migration/`.
+- **1NF** — every column is atomic; the unified diff is one `text` column per
+  patch rather than a bag of sub-tables.
+- **2NF** — single-column UUID keys mean no partial-key dependencies; every
+  attribute describes the whole row it lives on.
+- **3NF** — no transitive dependencies:
+  - a run stores `prompt_variant_id`, not the variant's name/template
+    (`variantName` in API responses is a JOIN, never a column);
+  - verdict fields (`reviewer`, `decision`, `override_reason`) live on
+    `review_verdict` keyed by `patch_id`, not denormalised onto `patch` or
+    `agent_run`;
+  - history is temporal: `review_audit` appends every change, and
+    `review_verdict` keeps only the current state.
+- The one deliberate denormalisation: `agent_run.total_cost_usd` /
+  `total_tokens` are aggregates over a run's patches, recomputed on ingest, kept
+  so the dashboard never aggregates 200 rows to render a list row.
 
-### `V1__init.sql`
+## API reference
 
-| Table             | Purpose                                                        |
-| ----------------- | -------------------------------------------------------------- |
-| `prompt_variant`  | Named prompt templates being A/B tested                        |
-| `agent_run`       | One agent run; references the prompt variant used; status check (`RUNNING`/`SUCCEEDED`/`FAILED`) |
-| `patch`           | A diff produced by a run; FK to `agent_run` with `ON DELETE CASCADE` |
-| `review_verdict`  | Current verdict on a patch; unique FK to `patch`; decision check (`ACCEPTED`/`REJECTED`) |
-| `review_audit`    | Audit trail — every verdict change (create/amend) appended, history never overwritten |
+Errors are RFC 7807 `application/problem+json` (`type`, `title`, `status`,
+`detail`, `instance`, plus `errors` for field validation). Full interactive docs:
+`/swagger-ui`.
 
-Indexes (each commented with the query it serves):
+| Method | Path | Purpose | Sample |
+| ------ | ---- | ------- | ------ |
+| GET | `/api/runs?variantId=&status=&from=&to=&page=&size=` | Paginated runs, newest first | `→ {"items":[{"id":"…","patchCount":5,"acceptedPatches":2,…}],"page":0,"size":20,"totalElements":540,"totalPages":27}` |
+| GET | `/api/runs/{id}` | Run + its patches + each patch's verdict | `→ {"run":{…},"patches":[{"filePath":"src/x.ts","diffUnified":"…","verdict":null}]}` |
+| POST | `/api/runs` | Ingest a run with patches (atomic) | `{"tool":"agentops-codex","repo":"acme/webapp","variantId":"…","patches":[…]}` `→ 201` |
+| GET | `/api/patches/{id}` | One patch with full diff | `→ {"id":"…","diffUnified":"diff --git …","verdict":{"decision":"ACCEPTED",…}}` |
+| POST | `/api/patches/{id}/review` | First verdict; 409 if already reviewed | `{"reviewer":"alice","decision":"ACCEPTED"}` `→ 201` |
+| PUT | `/api/patches/{id}/review` | Amend a verdict; history kept in `review_audit` | `{"reviewer":"diana","decision":"REJECTED","overrideReason":"flaky test"}` `→ 200` |
+| GET | `/api/variants` | All prompt variants | `→ [{"id":"…","name":"baseline-v1","template":"…"}]` |
+| POST | `/api/variants` | Create a variant (unique name) | `{"name":"cot-v2","template":"Think step by step…"}` `→ 201` |
+| GET | `/api/metrics/acceptance?bucket=day\|week` | Acceptance rate per variant per bucket | `→ [{"variantId":"…","bucketStart":"2026-08-03T00:00:00Z","accepted":3,"total":4,"acceptanceRate":0.75}]` |
+| GET | `/api/metrics/cost-latency?bucket=day\|week` | p50/p95 latency + summed cost per variant | `→ [{"variantId":"…","p50LatencyMs":2500.0,"p95LatencyMs":3850.0,"totalCostUsd":10.0,"patchCount":4}]` |
+| GET | `/actuator/health`, `/actuator/prometheus` | Health probes; Prometheus metrics | `→ {"status":"UP"}` / counter exposition |
 
-| Index                                    | Serves                                              |
-| ---------------------------------------- | --------------------------------------------------- |
-| `agent_run (started_at DESC)`            | dashboard recent-runs list — `GET /api/runs`        |
-| `agent_run (prompt_variant_id, started_at)` | runs filtered by variant — `GET /api/runs?variantId=` |
-| `patch (run_id)`                         | patches of a run — `GET /api/runs/{id}`             |
-| `review_verdict (decision, decided_at)`  | acceptance stats over time — `GET /api/metrics/acceptance` |
-| `review_audit (patch_id, changed_at)`    | per-patch review history (V3)                       |
+`POST /api/patches/{id}/review` rejects `REJECTED` verdicts without a
+non-blank `overrideReason` (400).
 
-### `V2__seed.sql`
+## Performance
 
-Deterministic seed data so the dashboard is populated on first boot:
+Real `EXPLAIN (ANALYZE, BUFFERS)` runs against the seeded + demo dataset
+(540 runs, 2930 patches, 1981 verdicts; warm cache).
 
-- 8 prompt variants with realistic templates (baseline → aggressive-refactor)
-- 40 agent runs (34 succeeded, 4 failed, 2 running) spread over ~45 days
-- 200 patches with genuine unified-diff text; `lines_added`/`lines_removed` match the diffs
-- 140 review verdicts (~70% of patches); acceptance rates vary per variant (43% → 94%)
+**The dashboard's main query — recent runs** (`ORDER BY started_at DESC LIMIT 20`):
 
-Timestamps are relative to `NOW()` so the data always looks fresh.
+Before `idx_agent_run_started_at` — full table scan + sort:
 
-### `V3__review_audit.sql`
-
-Append-only audit trail for review verdicts. `review_verdict` always holds the
-current state; every create or amend also inserts a row into `review_audit`
-(`action` = `CREATED`/`AMENDED`) so the full history is preserved.
-
-## API
-
-All errors are RFC 7807 `application/problem+json` `ProblemDetail` responses
-(type/title/status/detail/instance + field errors for validation failures).
-
-| Endpoint                     | Description                                   |
-| ---------------------------- | --------------------------------------------- |
-| `GET /api/runs`              | Paginated, sorted by `started_at` desc; filters `?variantId=&status=&from=&to=&page=&size=` |
-| `GET /api/runs/{id}`         | Run detail with its patches and each patch's verdict |
-| `POST /api/runs`             | Ingest a run with its patches in one transaction (atomic) |
-| `GET /api/patches/{id}`      | Single patch with full diff and verdict       |
-| `POST /api/patches/{id}/review` | Record first verdict `{reviewer, decision, overrideReason}` — 409 if already reviewed |
-| `PUT /api/patches/{id}/review`  | Amend the verdict; previous state kept in `review_audit` |
-| `GET /api/variants`          | All prompt variants                           |
-| `POST /api/variants`         | Create a prompt variant                       |
-| `GET /api/metrics/acceptance?bucket=day\|week` | Acceptance rate per variant per time bucket (native SQL, `date_trunc` + `GROUP BY`) |
-| `GET /api/metrics/cost-latency?bucket=day\|week` | p50/p95 latency and summed cost per variant per bucket (native SQL, `percentile_cont`) |
-| `GET /actuator/health`       | Health (liveness/readiness probes)            |
-| `GET /actuator/prometheus`   | Prometheus metrics: JVM/HTTP + custom `agentops_patches_reviewed_total{decision=}` counter and `agentops_run_ingest_seconds` timer |
-
-Review rules: a `REJECTED` decision requires a non-blank `overrideReason`
-(400 otherwise); a patch can only be reviewed once via `POST` (409 on repeat,
-use `PUT` to amend). The two metrics endpoints are implemented as native SQL
-with `date_trunc`/`percentile_cont` + `GROUP BY` (no in-memory aggregation);
-the SQL comments show the `EXPLAIN` plans using the V1 indexes.
-
-## Local development (without Docker)
-
-```bash
-# 1. Start Postgres only
-docker compose -f infra/docker-compose.yml up -d postgres
-
-# 2. Backend (Flyway applies migrations on startup)
-cd backend
-mvn spring-boot:run        # http://localhost:8080
-
-# 3. Frontend (Vite dev server, proxies /api -> :8080)
-cd frontend
-npm install
-npm run dev                # http://localhost:5173
+```text
+Limit  (actual time=0.180..0.185 rows=20)
+  ->  Sort (Sort Key: started_at DESC)  (actual time=0.177..0.178 rows=20)
+        ->  Seq Scan on agent_run  (rows=540)  (actual time=0.007..0.073)
+Execution Time: 0.251 ms
 ```
 
-## Tests
+After — index scan reads only the 20 needed rows:
 
-```bash
-# Backend — full suite incl. JaCoCo coverage gate (80%+ line coverage on
-# the service and controller packages; the build fails below it)
-cd backend && mvn verify
-#    unit tests:      Mockito service tests (review rules, 409, rate math)
-#    slice tests:     @WebMvcTest asserting status codes + ProblemDetail shape
-#    integration:     Testcontainers postgres:16 running the real Flyway
-#                     migrations + seed, with a month of fixture data asserting
-#                     date_trunc buckets and percentile_cont p50/p95
-
-# Frontend — Vitest + React Testing Library, API mocked with MSW
-cd frontend && npm ci && tsc --noEmit && npm run lint && npm test && npm run build
-
-# E2E — boots the docker-compose stack (globalSetup), opens a run, rejects a
-# patch with an override reason, asserts the acceptance rate drops, and wipes
-# the data volume afterwards (teardown)
-cd e2e && npm ci && npx playwright install chromium && npx playwright test
+```text
+Limit  (actual time=0.026..0.035 rows=20)
+  ->  Index Scan using idx_agent_run_started_at on agent_run
+      (actual time=0.026..0.033 rows=20)
+Execution Time: 0.057 ms
 ```
 
-## CI
+**The acceptance-rate metrics query** (`date_trunc` + `GROUP BY` over the last
+90 days): at this scale the planner correctly chooses hash joins either way
+(≈1.8–6.5 ms, `Seq Scan on review_verdict` with `Rows Removed by Filter: 763`).
+When scans are disabled to expose the index access paths, the plan uses exactly
+the V1 indexes the SQL comments document:
 
-`.github/workflows/ci.yml` runs on every push and PR:
+```text
+->  Bitmap Heap Scan on review_verdict rv
+      Recheck Cond: (decided_at >= now() - '90 days'::interval)
+      ->  Bitmap Index Scan on idx_review_verdict_decision_decided_at
+->  Index Scan using idx_patch_run_id on patch p
+```
 
-- **backend** — `mvn verify` on ubuntu-latest (Docker preinstalled for
-  Testcontainers), Maven cache via `setup-java`
-- **frontend** — `npm ci && tsc --noEmit && npm run lint && npm test`, npm cache
-  via `setup-node`
-- **e2e** — Playwright with Chromium; the suite boots the compose stack itself
+The indexes win as data grows (the 90-day filter on `(decision, decided_at)`
+becomes selective); the run-list index wins immediately, which is why
+`agent_run(started_at DESC)` was in V1.
 
 ## Monitoring
 
-Prometheus scrapes the backend at `/actuator/prometheus` (JVM/HTTP metrics plus
-the custom `agentops_patches_reviewed_total{decision=}` counter and
-`agentops_run_ingest_seconds` timer).
+`infra/prometheus/rules.yml` alerts when acceptance over the trailing hour
+drops below 50% (`AgentOpsAcceptanceRateTooLow`). The custom
+`agentops_patches_reviewed_total{decision=}` counter and
+`agentops_run_ingest_seconds` timer feed that rule. CopilotGuard/AgentDiff
+exporter targets are optional and configured via env vars
+(`COPILOTGUARD_HOST/PORT`, `AGENTDIFF_HOST/PORT`); the stack starts without them.
 
-The compose stack also scrapes the existing CopilotGuard and AgentDiff
-exporters when configured — host/port come from env vars and the jobs are
-optional (dropped when the host is unset, so the stack still starts without
-them):
+## Development & CI
 
-```bash
-COPILOTGUARD_HOST=copilotguard.internal COPILOTGUARD_PORT=9190 \
-AGENTDIFF_HOST=agentdiff.internal     AGENTDIFF_PORT=9200 \
-docker compose -f infra/docker-compose.yml up
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local dev loop. CI
+(`.github/workflows/ci.yml`) runs on every push and PR: `mvn verify` (unit +
+slice + Testcontainers tests, JaCoCo ≥80% line coverage on service/controller
+packages), `npm ci && tsc --noEmit && npm run lint && npm test` (Vitest + MSW),
+and a Playwright suite that boots the compose stack, rejects a patch, and
+asserts the acceptance rate drops.
 
-`infra/prometheus/rules.yml` defines
-`AgentOpsAcceptanceRateTooLow`: fires when the share of accepted patches over
-the trailing hour drops below 50% (5m `for`).
+## Built with AI assistance
 
-## Backend architecture
+The entire repository — schema and migrations, backend, frontend, tests, and
+CI — was generated with AI coding agents (OpenCode) over several sessions.
 
-Layered design in `backend/src/main/java/com/agentops/console`:
+**Agent-generated:** all of it; the prompts specified the stack, the schema,
+the endpoints, the acceptance rules, and the coverage gates.
 
-| Package           | Responsibility                                                        |
-| ----------------- | --------------------------------------------------------------------- |
-| `domain/`         | JPA `@Entity` classes (never exposed over HTTP)                       |
-| `repo/`           | Spring Data repositories                                              |
-| `service/`        | Business rules (review workflow, atomic ingest, native-SQL metrics)   |
-| `api/`            | `@RestController` endpoints                                          |
-| `api/dto/request` | Request DTOs with Bean Validation (`@NotBlank`, `@Min`, …)            |
-| `api/dto/response`| Response DTOs (entities are mapped before leaving the service layer)  |
-| `api/error/`      | `@RestControllerAdvice` mapping errors to RFC 7807 `ProblemDetail`    |
+**Changed after review:** the Postgres host port moved to 5435 (Docker Desktop
+reserves 5432–5434); the DB session timezone was pinned to UTC so `date_trunc`
+buckets are deterministic; review semantics were tightened to
+400-reject-without-reason / 409-already-reviewed / PUT-amends.
+
+**Two bugs caught in generated code:**
+
+1. **Metrics page crashed with `RangeError: Invalid time value`** — the cost
+   chart rendered before its query resolved; `Math.min()` over an empty point
+   list returned `Infinity`, the tick math produced `NaN`, and
+   `new Date(NaN).toISOString()` threw, unmounting the app. The Playwright E2E
+   run caught it; fixed with an empty-series guard plus a regression test.
+2. **Proxied POSTs returned 403 "Invalid CORS request"** — nginx forwarded the
+   browser's `Origin` header to the backend, whose CORS allowlist only
+   contained `localhost:5173`, so any non-default frontend port broke Accept /
+   Reject. Caught by E2E; fixed by stripping `Origin` at the proxy.
+   (Earlier: Flyway treated `${API_BASE}` inside seeded diffs as a placeholder,
+   and Hibernate's expansion of duplicate `:bucket` params broke PostgreSQL's
+   GROUP BY expression matching — both fixed with regression coverage.)
