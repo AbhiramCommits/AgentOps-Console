@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * Runs the real Flyway migrations against a Testcontainers Postgres (including
@@ -153,15 +154,15 @@ class MetricsIntegrationTest {
 
         // p50 of [1000, 2000] = 1500; p95 = 1000 + 0.95 * 1000 = 1950.
         assertThat(rows.get(0).bucketStart()).isEqualTo(utc(3, 0));
-        assertThat(rows.get(0).p50LatencyMs()).isEqualTo(1500.0);
-        assertThat(rows.get(0).p95LatencyMs()).isEqualTo(1950.0);
+        assertThat(rows.get(0).p50LatencyMs()).isCloseTo(1500.0, within(1e-6));
+        assertThat(rows.get(0).p95LatencyMs()).isCloseTo(1950.0, within(1e-6));
         assertThat(rows.get(0).totalCostUsd()).isEqualByComparingTo("3.00");
         assertThat(rows.get(0).patchCount()).isEqualTo(2);
 
         // p50 of [3000, 4000] = 3500; p95 = 3000 + 0.95 * 1000 = 3950.
         assertThat(rows.get(1).bucketStart()).isEqualTo(utc(7, 0));
-        assertThat(rows.get(1).p50LatencyMs()).isEqualTo(3500.0);
-        assertThat(rows.get(1).p95LatencyMs()).isEqualTo(3950.0);
+        assertThat(rows.get(1).p50LatencyMs()).isCloseTo(3500.0, within(1e-6));
+        assertThat(rows.get(1).p95LatencyMs()).isCloseTo(3950.0, within(1e-6));
         assertThat(rows.get(1).totalCostUsd()).isEqualByComparingTo("7.00");
     }
 
@@ -174,8 +175,8 @@ class MetricsIntegrationTest {
         CostLatencyBucketResponse bucket = rows.get(0);
         assertThat(bucket.bucketStart()).isEqualTo(utc(3, 0));
         assertThat(bucket.patchCount()).isEqualTo(4);
-        assertThat(bucket.p50LatencyMs()).isEqualTo(2500.0);
-        assertThat(bucket.p95LatencyMs()).isEqualTo(3850.0);
+        assertThat(bucket.p50LatencyMs()).isCloseTo(2500.0, within(1e-6));
+        assertThat(bucket.p95LatencyMs()).isCloseTo(3850.0, within(1e-6));
         assertThat(bucket.totalCostUsd()).isEqualByComparingTo("10.00");
     }
 
